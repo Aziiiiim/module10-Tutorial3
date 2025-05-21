@@ -1,0 +1,6 @@
+client/target
+client/pkg
+
+server/node_modules
+
+*.log
