@@ -3,14 +3,16 @@ import WebSocket, { WebSocketServer } from 'ws';
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
 interface User {
     ws: WebSocket;
-    nick: String;
+    id: string;
+    nick: string;
+    avatar: string;
     isAlive: boolean;
 }
 
 interface Message {
-    messageType: String;
-    data: String;
-    dataArray: String[];
+    messageType: string;
+    data: string;
+    dataArray: string[];
 }
 
 let users: User[] = [];
@@ -27,23 +29,43 @@ wss.on('connection', (ws: WebSocket) => {
             const parsed_data: Message = JSON.parse(raw_data);
             switch (parsed_data.messageType) {
                 case 'register':
-                    users.push({ ws, nick: parsed_data.data, isAlive: true });
-                    broadcast(JSON.stringify({ messageType: 'users', dataArray: users.map((u) => u.nick) }));
+                    try {
+                        const userData = JSON.parse(parsed_data.data);
+                        const newUser: User = {
+                            ws,
+                            id: userData.id,
+                            nick: userData.name,
+                            avatar: userData.avatar,
+                            isAlive: true,
+                        };
+                        users.push(newUser);
+                        broadcast(JSON.stringify({
+                            messageType: 'users',
+                            data: JSON.stringify(
+                                users.map((u) => ({
+                                    id: u.id,
+                                    name: u.nick,
+                                    avatar: u.avatar,
+                                }))
+                            )
+                        }));
+                    } catch (err) {
+                        console.error('Invalid register data', err);
+                    }
                     break;
+
                 case 'message':
                     const sender = users.find((u) => u.ws === ws);
                     if (sender) {
-                        broadcast(
-                            JSON.stringify({
-                                messageType: 'message',
-                                data: JSON.stringify({
-                                    from: sender.nick,
-                                    message: parsed_data.data,
-                                    time: Date.now(),
-                                }),
-                            })
-                        );
+                        broadcast(JSON.stringify({
+                            messageType: 'message',
+                            data: JSON.stringify({
+                                from: sender.id,
+                                message: parsed_data.data,
+                            }),
+                        }));
                     }
+                    break;
             }
         } catch (e) {
             console.log('Error in message', e);
@@ -56,7 +78,17 @@ const interval = setInterval(function ping() {
     const updated_users = users.filter((u) => current_clients.includes(u.ws));
     if (updated_users.length !== users.length) {
         users = updated_users;
-        broadcast(JSON.stringify({ messageType: 'users', dataArray: users.map((u) => u.nick) }));
+        broadcast(JSON.stringify({
+            messageType: 'users',
+            data: JSON.stringify(
+                users.map((u) => ({
+                    id: u.id,
+                    name: u.nick,
+                    avatar: u.avatar,
+                }))
+            )
+        }));
+
     }
 }, 5000);
 

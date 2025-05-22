@@ -3,6 +3,8 @@ use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_agent::{Bridge, Bridged};
 
+use uuid::Uuid;
+
 use crate::{User, services::websocket::WebsocketService};
 
 use crate::services::event_bus::EventBus;
@@ -34,8 +36,9 @@ struct WebSocketMessage {
     data: Option<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize)]
 struct UserProfile {
+    id: String,
     name: String,
     avatar: String,
 }
@@ -58,12 +61,23 @@ impl Component for Chat {
             .expect("context to be set");
         let wss = WebsocketService::new();
         let username = user.username.borrow().clone();
+        let avatar=user.avatar.borrow().clone();
+        let user_id = Uuid::new_v4().to_string();
+
+        
 
         let message = WebSocketMessage {
             message_type: MsgTypes::Register,
-            data: Some(username.to_string()),
+            data: Some(
+                serde_json::json!({
+                    "id": user_id,
+                    "name": username,
+                    "avatar": avatar
+                }).to_string()
+            ),
             data_array: None,
         };
+
 
         if let Ok(_) = wss
             .tx
@@ -115,13 +129,13 @@ impl Component for Chat {
                     <div class="w-full grow overflow-auto border-b-2 border-gray-300">
                         {
                             self.messages.iter().map(|m| {
-                                let user = self.users.iter().find(|u| u.name == m.from).unwrap();
+                                let user = self.users.iter().find(|u| u.id == m.from).unwrap();
                                 html!{
                                     <div class="flex items-end w-3/6 bg-gray-100 m-8 rounded-tl-lg rounded-tr-lg rounded-br-lg ">
                                         <img class="w-8 h-8 rounded-full m-3" src={user.avatar.clone()} alt="avatar"/>
                                         <div class="p-3">
                                             <div class="text-sm">
-                                                {m.from.clone()}
+                                                {user.name.clone()}
                                             </div>
                                             <div class="text-xs text-gray-500">
                                                 if m.message.ends_with(".gif") {
@@ -156,19 +170,13 @@ impl Component for Chat {
                 let msg: WebSocketMessage = serde_json::from_str(&s).unwrap();
                 match msg.message_type {
                     MsgTypes::Users => {
-                        let users_from_message = msg.data_array.unwrap_or_default();
-                        self.users = users_from_message
-                            .iter()
-                            .map(|u| UserProfile {
-                                name: u.into(),
-                                avatar: format!(
-                                    "https://avatars.dicebear.com/api/adventurer-neutral/{}.svg",
-                                    u
-                                )
-                                .into(),
-                            })
-                            .collect();
-                        return true;
+                        if let Some(user_json) = msg.data {
+                            let users_from_message: Vec<UserProfile> =
+                                serde_json::from_str(&user_json).unwrap(); 
+                            self.users = users_from_message;
+                            return true;
+                        }
+                        false
                     }
                     MsgTypes::Message => {
                         let message_data: MessageData =
