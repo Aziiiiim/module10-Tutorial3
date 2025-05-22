@@ -37,6 +37,7 @@ pub type User = Rc<UserInner>;
 #[derive(Debug, PartialEq)]
 pub struct UserInner {
     pub username: RefCell<String>,
+    pub avatar: RefCell<String>,
 }
 
 
@@ -55,6 +56,7 @@ fn main() -> Html {
     let ctx = use_state(|| {
         Rc::new(UserInner {
             username: RefCell::new("initial".into()),
+            avatar: RefCell::new("/icons/default.png".into()),
         })
     });
 
